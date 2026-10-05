@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SALESTORM | High-Scale Flash Sale Visualizer & Architecture Blueprint</title>
+  <link rel="stylesheet" href="styles.css">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="background-glow"></div>
+  
+  <header class="app-header">
+    <div class="logo-group">
+      <div class="lightning-icon">⚡</div>
+      <div>
+        <h1>SALESTORM</h1>
+        <p class="subtitle">High-Scale Flash-Sale E-Commerce System Architecture Visualizer</p>
+      </div>
+    </div>
+    <div class="header-badges">
+      <span class="badge badge-purple">500,000 req/s Peak Ingress</span>
+      <span class="badge badge-green" id="systemStatus">SYSTEM READY</span>
+    </div>
+  </header>
+
+  <main class="dashboard-container">
+    <!-- Controls Section -->
+    <section class="panel control-panel">
+      <h2>🎮 Interactive Simulation Controls</h2>
+      <div class="button-group">
+        <button id="btnRunSim" class="btn btn-primary">
+          <span class="btn-icon">🚀</span> Run Flash Sale (10,000 Buyers)
+        </button>
+        <button id="btnRun50x" class="btn btn-warning">
+          <span class="btn-icon">⚡</span> Simulate 50x Traffic Burst (500k rps)
+        </button>
+        <button id="btnToggleOutage" class="btn btn-danger">
+          <span class="btn-icon">🛑</span> Toggle 30s Order Service Outage
+        </button>
+        <button id="btnReset" class="btn btn-secondary">
+          <span class="btn-icon">🔄</span> Reset State
+        </button>
+      </div>
+    </section>
+
+    <!-- Metrics Grid -->
+    <section class="metrics-grid">
+      <div class="metric-card">
+        <div class="metric-header">
+          <span>Ingress Requests</span>
+          <span class="metric-icon">🌊</span>
+        </div>
+        <div class="metric-value" id="valIngress">0</div>
+        <div class="metric-subtext">Global Edge Ingress</div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-header">
+          <span>Edge Shedded / Dropped</span>
+          <span class="metric-icon">🛡️</span>
+        </div>
+        <div class="metric-value text-red" id="valEdgeDropped">0</div>
+        <div class="metric-subtext">WAF + Edge SOLD_OUT KV Gate</div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-header">
+          <span>Redis Available Stock</span>
+          <span class="metric-icon">📦</span>
+        </div>
+        <div class="metric-value text-amber" id="valStock">100</div>
+        <div class="metric-subtext">Initial Stock N = 100</div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-header">
+          <span>Successful Reservations</span>
+          <span class="metric-icon">🔒</span>
+        </div>
+        <div class="metric-value text-green" id="valReservations">0</div>
+        <div class="metric-subtext">Redis Lua Gate (TTL 10m)</div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-header">
+          <span>Payment Success / Decline</span>
+          <span class="metric-icon">💳</span>
+        </div>
+        <div class="metric-value-group">
+          <span class="text-green" id="valPaySuccess">0</span>
+          <span class="divider">/</span>
+          <span class="text-red" id="valPayFail">0</span>
+        </div>
+        <div class="metric-subtext">Stripe Gateway (95% / 5%)</div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-header">
+          <span>Kafka Queue Buffer</span>
+          <span class="metric-icon">📨</span>
+        </div>
+        <div class="metric-value text-purple" id="valKafka">0</div>
+        <div class="metric-subtext" id="kafkaSubtext">Buffered Outbox Events</div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-header">
+          <span>Orders Confirmed</span>
+          <span class="metric-icon">✅</span>
+        </div>
+        <div class="metric-value text-cyan" id="valOrders">0</div>
+        <div class="metric-subtext">Processed Idempotently</div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-header">
+          <span>Duplicate Retries Intercepted</span>
+          <span class="metric-icon">🔄</span>
+        </div>
+        <div class="metric-value text-blue" id="valDuplicates">0</div>
+        <div class="metric-subtext">2% Duplicate Protection</div>
+      </div>
+    </section>
+
+    <!-- Lower Section: Assertions & Log Terminal -->
+    <div class="detail-grid">
+      <!-- Assertions Panel -->
+      <section class="panel assertions-panel">
+        <h2>🛡️ Automated System Architectural Assertions</h2>
+        <div class="assertion-list">
+          <div class="assertion-item" id="assertOversell">
+            <span class="status-icon">✅</span>
+            <div>
+              <strong>Zero Oversell Guarantee</strong>
+              <p>Available stock balance never drops below zero (CHECK qty >= 0).</p>
+            </div>
+          </div>
+
+          <div class="assertion-item" id="assertDoubleRes">
+            <span class="status-icon">✅</span>
+            <div>
+              <strong>No Double-Reservation Per User</strong>
+              <p>Redis Lua SETNX prevents multiple stock claims per customer ID.</p>
+            </div>
+          </div>
+
+          <div class="assertion-item" id="assertDoubleCharge">
+            <span class="status-icon">✅</span>
+            <div>
+              <strong>No Double-Charge On Duplicate Retries</strong>
+              <p>Idempotency-Key guard intercepts 2% duplicate network requests.</p>
+            </div>
+          </div>
+
+          <div class="assertion-item" id="assertOutageLoss">
+            <span class="status-icon">✅</span>
+            <div>
+              <strong>Zero Data Loss During Outage</strong>
+              <p>100% of payments buffered in Kafka are recovered to orders post-outage.</p>
+            </div>
+          </div>
+
+          <div class="assertion-item" id="assertStockRelease">
+            <span class="status-icon">✅</span>
+            <div>
+              <strong>Idempotent Stock Replenishment</strong>
+              <p>Declined payments trigger Lua release script, restoring stock for queue backfill.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Log Terminal Panel -->
+      <section class="panel terminal-panel">
+        <div class="terminal-header">
+          <h2>💻 Pipeline Step-by-Step Trace Terminal</h2>
+          <span class="terminal-dot"></span>
+        </div>
+        <div class="terminal-window" id="terminalLogs">
+          <div class="log-line log-info">[00:00:00] System Initialized. Click 'Run Flash Sale' to execute simulation.</div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,493 @@
+openapi: 3.0.3
+info:
+  title: SALESTORM High-Scale Flash-Sale E-Commerce API
+  description: Design-first API specification for SALESTORM handling high-concurrency flash sales, reservations, payment settlement, and order processing.
+  version: 1.0.0
+servers:
+  - url: https://api.salestorm.io/v1
+    description: Production Edge API Gateway
+paths:
+  /products:
+    get:
+      summary: List catalog products
+      operationId: listProducts
+      parameters:
+        - name: category_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Product list returned successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Product'
+  /products/{id}:
+    get:
+      summary: Get product details and sale status
+      operationId: getProductById
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Product details found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductDetail'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /cart:
+    get:
+      summary: Get user cart
+      operationId: getCart
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+  /cart/items:
+    post:
+      summary: Add item to user cart
+      operationId: addCartItem
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddCartItemRequest'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+
+  /reservations:
+    post:
+      summary: Reserve inventory atomically during flash sale
+      operationId: createReservation
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            example: "idemp-req-88942-uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateReservationRequest'
+      responses:
+        '201':
+          description: Stock reserved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservationResponse'
+        '202':
+          description: Queued in virtual waiting room
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WaitingRoomResponse'
+        '409':
+          description: Out of stock or limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Rate limit exceeded (Retry-After header present)
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                example: 2
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /reservations/{id}:
+    get:
+      summary: Get reservation status
+      operationId: getReservationById
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservationResponse'
+        '410':
+          description: Reservation expired
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /checkout:
+    post:
+      summary: Initiate checkout session bound to reservation
+      operationId: initiateCheckout
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckoutRequest'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckoutResponse'
+
+  /payments:
+    post:
+      summary: Execute idempotent payment charge
+      operationId: processPayment
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRequest'
+      responses:
+        '200':
+          description: Payment processed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+        '202':
+          description: Payment processing in progress (Indeterminate)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+        '503':
+          description: Payment Gateway Circuit Open
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /orders:
+    post:
+      summary: Create order from confirmed payment
+      operationId: createOrder
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderRequest'
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+  /orders/{id}:
+    get:
+      summary: Get order details
+      operationId: getOrderById
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+  /orders/{id}/status:
+    get:
+      summary: Poll order lifecycle status
+      operationId: getOrderStatus
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  order_id:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    example: "CONFIRMED"
+                  updated_at:
+                    type: string
+                    format: date-time
+
+  /webhooks/payments:
+    post:
+      summary: Ingest Stripe/Adyen webhook notifications
+      operationId: handlePaymentWebhook
+      responses:
+        '200':
+          description: Webhook ingested successfully
+
+  /webhooks/courier:
+    post:
+      summary: Ingest FedEx/DHL tracking status webhooks
+      operationId: handleCourierWebhook
+      responses:
+        '200':
+          description: Webhook ingested successfully
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Product:
+      type: object
+      properties:
+        product_id:
+          type: string
+          format: uuid
+        sku:
+          type: string
+        title:
+          type: string
+        price:
+          type: number
+
+    ProductDetail:
+      allOf:
+        - $ref: '#/components/schemas/Product'
+        - type: object
+          properties:
+            is_sale_active:
+              type: boolean
+            available_stock:
+              type: integer
+            is_sold_out:
+              type: boolean
+
+    Cart:
+      type: object
+      properties:
+        cart_id:
+          type: string
+          format: uuid
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CartItem'
+
+    CartItem:
+      type: object
+      properties:
+        product_id:
+          type: string
+          format: uuid
+        quantity:
+          type: integer
+
+    AddCartItemRequest:
+      type: object
+      required:
+        - product_id
+        - quantity
+      properties:
+        product_id:
+          type: string
+          format: uuid
+        quantity:
+          type: integer
+
+    CreateReservationRequest:
+      type: object
+      required:
+        - sale_id
+        - product_id
+        - quantity
+      properties:
+        sale_id:
+          type: string
+          format: uuid
+        product_id:
+          type: string
+          format: uuid
+        quantity:
+          type: integer
+          default: 1
+
+    ReservationResponse:
+      type: object
+      properties:
+        reservation_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          example: "RESERVED"
+        expires_at:
+          type: string
+          format: date-time
+
+    WaitingRoomResponse:
+      type: object
+      properties:
+        ticket_id:
+          type: string
+        position:
+          type: integer
+        estimated_wait_seconds:
+          type: integer
+
+    CheckoutRequest:
+      type: object
+      required:
+        - reservation_id
+      properties:
+        reservation_id:
+          type: string
+          format: uuid
+
+    CheckoutResponse:
+      type: object
+      properties:
+        checkout_session_id:
+          type: string
+          format: uuid
+        total_amount:
+          type: number
+
+    PaymentRequest:
+      type: object
+      required:
+        - reservation_id
+        - payment_method_token
+      properties:
+        reservation_id:
+          type: string
+          format: uuid
+        payment_method_token:
+          type: string
+
+    PaymentResponse:
+      type: object
+      properties:
+        payment_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          example: "SUCCESS"
+        transaction_ref:
+          type: string
+
+    CreateOrderRequest:
+      type: object
+      required:
+        - payment_id
+      properties:
+        payment_id:
+          type: string
+          format: uuid
+
+    OrderResponse:
+      type: object
+      properties:
+        order_id:
+          type: string
+          format: uuid
+        order_number:
+          type: string
+        status:
+          type: string
+          example: "CONFIRMED"
+
+    ErrorResponse:
+      type: object
+      required:
+        - error_code
+        - message
+        - timestamp
+      properties:
+        error_code:
+          type: string
+          example: "OUT_OF_STOCK"
+        message:
+          type: string
+          example: "Requested product stock is depleted."
+        timestamp:
+          type: string
+          format: date-time
+
+  responses:
+    NotFoundError:
+      description: Requested resource was not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'

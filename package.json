@@ -1,0 +1,12 @@
+{
+  "name": "salestorm-simulation",
+  "version": "1.0.0",
+  "description": "Executable high-scale flash sale simulation server and visualizer dashboard for SALESTORM",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
